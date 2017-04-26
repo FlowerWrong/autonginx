@@ -13,6 +13,7 @@ import (
 	"time"
 	"crypto/md5"
 	"io"
+	"github.com/hudl/fargo"
 )
 
 func contains(slice []string, item string) bool {
@@ -110,6 +111,7 @@ server {
 
 	siteNginxPath := "/tmp/www.lipuwater.com.conf"
 	tmpNginxPath := "/tmp/nginx.conf"
+	shell.Cmd("sudo", "cp -f", tmpNginxPath, siteNginxPath).Run()
 
 	f, err := os.Create(tmpNginxPath)
 	if err != nil {
@@ -153,6 +155,16 @@ server {
 		shell.Cmd("sudo", "nginx -s reload").Run()
 	} else {
 		log.Println("check sum equal")
+	}
+
+
+	// eureka client
+	eurekaClient := fargo.NewConn("http://127.0.0.1:8761/eureka")
+	app, _ := eurekaClient.GetApp("LIPU")
+	for _, lipuInstance := range app.Instances  {
+		log.Println(lipuInstance.Status)
+		log.Println(lipuInstance.HostName)
+		log.Println(lipuInstance.Port)
 	}
 
 

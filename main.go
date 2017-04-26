@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"crypto/md5"
+	"io"
 )
 
 func contains(slice []string, item string) bool {
@@ -68,30 +70,23 @@ server {
 	}
 
 	type DomainHost struct {
-		Name string
+		Name  string
 		Ports []string
 	}
-
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password set
-		DB:       0,  // use default DB
+		DB:       0, // use default DB
 	})
 	redisClient.Ping()
 
-
-
-
-
 	log.Println("current OS is ", runtime.GOOS)
-
 
 	containers, err := dockerClient.ListContainers(docker.ListContainersOptions{All: false})
 	if err != nil {
 		panic(err)
 	}
-
 
 	lRange := redisClient.LRange("ports", 0, -1)
 	if lRange.Err() != nil {
@@ -99,7 +94,7 @@ server {
 	}
 
 	runningPorts := make([]string, 0)
-	for _, springPort := range lRange.Val()  {
+	for _, springPort := range lRange.Val() {
 		p, err := strconv.Atoi(springPort)
 		if err != nil {
 			panic(err)
@@ -108,7 +103,6 @@ server {
 			runningPorts = append(runningPorts, springPort)
 		}
 	}
-
 
 	var h = DomainHost{Name: "www.lipuwater.com", Ports: runningPorts}
 	t := template.Must(template.New("nginx").Parse(nginx))
@@ -126,22 +120,48 @@ server {
 
 	// update nginx conf and reload
 	// /etc/nginx/sites
-	shell.Cmd("sudo", "cp -f /tmp/nginx.conf /tmp/www.lipuwater.com.conf").Run()
-	shell.Cmd("sudo", "nginx -s reload").Run()
+	siteNginxPath := "/tmp/www.lipuwater.com.conf"
+
+	// check if conf no change
+	f, err = os.Open("/tmp/nginx.conf")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	md5File := md5.New()
+	if _, err := io.Copy(md5File, f); err != nil {
+		log.Fatal(err)
+	}
+	autoNginxSum := md5.Sum(nil)
+
+	nginxConf, err := os.Open(siteNginxPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer nginxConf.Close()
+	md5NginxConfFile := md5.New()
+	if _, err := io.Copy(md5NginxConfFile, nginxConf); err != nil {
+		log.Fatal(err)
+	}
+	nginxOriginSum := md5.Sum(nil)
+
+	if autoNginxSum != nginxOriginSum {
+		shell.Cmd("sudo", "cp -f /tmp/nginx.conf /tmp/www.lipuwater.com.conf").Run()
+		shell.Cmd("sudo", "nginx -s reload").Run()
+	} else {
+		log.Println("check sum equal")
+	}
 
 
 	// stop none use container
 	time.Sleep(100)
-	for _, container := range containers  {
+	for _, container := range containers {
 		log.Println(container.ID + " " + container.Image)
-		for _, containerPort := range container.Ports  {
+		for _, containerPort := range container.Ports {
 			if containerPort.PrivatePort == containerPort.PublicPort {
 				if containerPort.PrivatePort > 8999 && containerPort.PrivatePort < 10000 {
 					p := strconv.FormatInt(containerPort.PrivatePort, 10)
 					if !contains(runningPorts, p) {
-						// stop this container
-						log.Println("The container ", container.ID, " will be stop")
-
 						var connectionCount = 0
 						var cmdOut *shell.Process
 
@@ -160,7 +180,9 @@ server {
 						}
 
 						log.Println("connectionCount is ", connectionCount)
-						if connectionCount > 0 {
+						if connectionCount < 1 {
+							// stop this container
+							log.Println("The container ", container.ID, " will be stop")
 							dockerClient.StopContainer(container.ID, 100) // given timeout (in seconds)
 						}
 					}

@@ -148,7 +148,6 @@ server {
 	}
 	nginxOriginSum := md5.Sum(nil)
 
-	shell.Cmd("sudo", "cp -f", tmpNginxPath, siteNginxPath).Run()
 	if autoNginxSum != nginxOriginSum {
 		shell.Cmd("sudo", "cp -f", tmpNginxPath, siteNginxPath).Run()
 		shell.Cmd("sudo", "nginx -s reload").Run()
@@ -171,9 +170,9 @@ server {
 
 						if runtime.GOOS == "darwin" {
 							// sudo netstat -antl -p tcp | grep -e ESTABLISHED -e TIME_WAIT -e CLOSE_WAIT -e SYN_SENT | grep 127.0.0.1:8002
-							cmdOut = shell.Cmd("sudo", "netstat -antl -p tcp").Pipe("grep", "-e ESTABLISHED -e TIME_WAIT -e CLOSE_WAIT -e SYN_SEN").Pipe("wc", "-l").Run()
+							cmdOut = shell.Cmd("sudo", "netstat -antl -p tcp").Pipe("grep", "-e ESTABLISHED -e TIME_WAIT -e CLOSE_WAIT -e SYN_SEN").Pipe("grep", "127.0.0.1:", p).Pipe("wc", "-l").Run()
 						} else if runtime.GOOS == "linux" {
-							cmdOut = shell.Cmd("sudo", "netstat -antp").Pipe("grep", "-e ESTABLISHED -e TIME_WAIT -e CLOSE_WAIT -e SYN_SEN").Pipe("wc", "-l").Run()
+							cmdOut = shell.Cmd("sudo", "netstat -antp").Pipe("grep", "-e ESTABLISHED -e TIME_WAIT -e CLOSE_WAIT -e SYN_SEN").Pipe("grep", "127.0.0.1:", p).Pipe("wc", "-l").Run()
 						} else {
 							panic("No support for this OS")
 						}

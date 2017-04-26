@@ -107,7 +107,11 @@ server {
 	var h = DomainHost{Name: "www.lipuwater.com", Ports: runningPorts}
 	t := template.Must(template.New("nginx").Parse(nginx))
 
-	f, err := os.Create("/tmp/nginx.conf")
+
+	siteNginxPath := "/tmp/www.lipuwater.com.conf"
+	tmpNginxPath := "/tmp/nginx.conf"
+
+	f, err := os.Create(tmpNginxPath)
 	if err != nil {
 		panic(err)
 	}
@@ -120,10 +124,9 @@ server {
 
 	// update nginx conf and reload
 	// /etc/nginx/sites
-	siteNginxPath := "/tmp/www.lipuwater.com.conf"
 
 	// check if conf no change
-	f, err = os.Open("/tmp/nginx.conf")
+	f, err = os.Open(tmpNginxPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -145,8 +148,9 @@ server {
 	}
 	nginxOriginSum := md5.Sum(nil)
 
+	shell.Cmd("sudo", "cp -f", tmpNginxPath, siteNginxPath).Run()
 	if autoNginxSum != nginxOriginSum {
-		shell.Cmd("sudo", "cp -f /tmp/nginx.conf /tmp/www.lipuwater.com.conf").Run()
+		shell.Cmd("sudo", "cp -f", tmpNginxPath, siteNginxPath).Run()
 		shell.Cmd("sudo", "nginx -s reload").Run()
 	} else {
 		log.Println("check sum equal")
